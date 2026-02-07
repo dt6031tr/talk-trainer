@@ -4,71 +4,291 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>話し方トレーニング</title>
-
 <style>
-body{font-family:sans-serif;margin:16px;background:#fafafa}
-.card{background:#fff;border-radius:14px;padding:16px;margin:12px 0;border:1px solid #ddd}
-button{padding:10px 14px;border-radius:12px;border:1px solid #bbb;background:#fff}
-.pill{padding:4px 10px;border:1px solid #ddd;border-radius:999px;font-size:12px}
+  body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;margin:16px;background:#fafafa;line-height:1.5}
+  h1{font-size:18px;margin:0 0 10px}
+  .card{background:#fff;border:1px solid #ddd;border-radius:14px;padding:14px;margin:12px 0}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  button{padding:10px 12px;border-radius:12px;border:1px solid #bbb;background:#fff}
+  button.primary{border-color:#111}
+  button:disabled{opacity:.45}
+  input,textarea{width:100%;box-sizing:border-box;padding:10px;border-radius:12px;border:1px solid #bbb}
+  .pill{padding:4px 10px;border:1px solid #ddd;border-radius:999px;font-size:12px}
+  .dot{width:10px;height:10px;border-radius:999px;background:#bbb;display:inline-block}
+  .dot.rec{background:#d00000;box-shadow:0 0 0 4px rgba(208,0,0,.15)}
+  .small{font-size:13px;color:#555}
+  .historyItem{border-top:1px solid #eee;padding-top:10px;margin-top:10px}
 </style>
 </head>
-
 <body>
 
 <h1>話し方トレーニング</h1>
 
 <div class="card">
-  <span class="pill" id="tag">未選択</span>
-  <button id="nextPromptBtn">お題を出す</button>
-  <p id="prompt">「お題を出す」を押してください。</p>
+  <div class="row">
+    <span class="pill">お題</span>
+    <span id="tag" class="pill">未選択</span>
+    <button id="nextPromptBtn">お題を出す</button>
+  </div>
+  <p id="prompt" style="font-weight:600;">「お題を出す」を押してください。</p>
 </div>
 
 <div class="card">
-  <button id="testBtn">テストボタン</button>
-  <p id="testOut"></p>
+  <div class="small">一言要約（30文字目安）</div>
+  <input id="oneLine" placeholder="例：フロスは隣接面の汚れを落とすため必要">
+  <div class="small" style="margin-top:10px;">結論→理由→例（箇条書きでOK）</div>
+  <input id="ketsuron" placeholder="結論">
+  <input id="riyuu" placeholder="理由" style="margin-top:8px;">
+  <input id="rei" placeholder="例" style="margin-top:8px;">
+</div>
+
+<div class="card">
+  <div class="row">
+    <span class="pill">録音</span>
+    <span id="recDot" class="dot"></span>
+    <span id="recStatus" class="small">録音なし</span>
+  </div>
+  <div class="row" style="margin-top:8px;">
+    <button class="primary" id="recStartBtn">🎤 録音開始</button>
+    <button id="recStopBtn" disabled>⏹ 録音停止</button>
+    <button id="recClearBtn" disabled>🗑 破棄</button>
+  </div>
+  <audio id="recPreview" controls style="width:100%;margin-top:10px;display:none;"></audio>
+</div>
+
+<div class="card">
+  <div class="row">
+    <button class="primary" id="saveBtn">記録を保存</button>
+    <button id="copyBtn">添削用にコピー</button>
+    <button id="wipeBtn">履歴削除</button>
+  </div>
+  <div id="history" class="small" style="margin-top:10px;"></div>
 </div>
 
 <script>
-// ===== DEBUG PANEL =====
-(() => {
-  const box = document.createElement("div");
-  box.style.cssText="position:fixed;left:10px;right:10px;bottom:10px;background:#fff;border:2px solid red;padding:8px;z-index:9999;font-size:12px;display:none";
-  const show=(m)=>{box.style.display="block";box.textContent+=m+"\\n";}
-  window.addEventListener("error",e=>show("JS ERROR: "+e.message));
-  document.body.appendChild(box);
-})();
-
-// ===== アプリ本体 =====
 const $ = id => document.getElementById(id);
 
-const prompts=[
- {tag:"歯科",text:"フロスが必要な理由を説明してください"},
- {tag:"経営",text:"検査を大事にする理由を説明してください"},
- {tag:"日常",text:"今日の出来事を端的に説明してください"}
+// ===== Prompts (random, no immediate repeat) =====
+const prompts = [
+  { tag:"歯科（患者説明）", text:"フロスが必要な理由を、患者さんにわかる言葉で説明してください。" },
+  { tag:"歯科（初診）", text:"『初診では今日は治療をしない』理由を、安心感が出るように説明してください。" },
+  { tag:"スタッフ向け", text:"院内で『結論から話す』ルールを導入する理由を説明してください。" },
+  { tag:"経営", text:"検査（写真・歯周検査等）を大事にする価値を説明してください。" },
+  { tag:"日常", text:"今日いちばん大事だった出来事を、端的に説明してください。" }
 ];
-
-let promptIndex=-1;
+let promptIndex = -1;
 
 function pickRandomPromptIndex(){
- let idx=promptIndex;
- while(idx===promptIndex){
-  idx=Math.floor(Math.random()*prompts.length);
- }
- return idx;
+  if (prompts.length <= 1) return 0;
+  let idx = promptIndex;
+  while(idx === promptIndex) idx = Math.floor(Math.random() * prompts.length);
+  return idx;
 }
-
 function nextPrompt(){
- promptIndex=pickRandomPromptIndex();
- $("tag").textContent=prompts[promptIndex].tag;
- $("prompt").textContent=prompts[promptIndex].text;
+  promptIndex = pickRandomPromptIndex();
+  $("tag").textContent = prompts[promptIndex].tag;
+  $("prompt").textContent = prompts[promptIndex].text;
+}
+$("nextPromptBtn").addEventListener("click", nextPrompt);
+
+// ===== IndexedDB for audio =====
+const DB_NAME = "talk_trainer_db_v1";
+const STORE = "audio";
+function openDB(){
+  return new Promise((resolve,reject)=>{
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function putBlob(key, blob){
+  const db = await openDB();
+  return new Promise((resolve,reject)=>{
+    const tx = db.transaction(STORE,"readwrite");
+    tx.objectStore(STORE).put(blob, key);
+    tx.oncomplete=()=>{db.close();resolve();};
+    tx.onerror=()=>{db.close();reject(tx.error);};
+  });
+}
+async function getBlob(key){
+  const db = await openDB();
+  return new Promise((resolve,reject)=>{
+    const tx = db.transaction(STORE,"readonly");
+    const req = tx.objectStore(STORE).get(key);
+    req.onsuccess=()=>{const v=req.result;db.close();resolve(v||null);};
+    req.onerror=()=>{db.close();reject(req.error);};
+  });
+}
+async function delBlob(key){
+  const db = await openDB();
+  return new Promise((resolve,reject)=>{
+    const tx = db.transaction(STORE,"readwrite");
+    tx.objectStore(STORE).delete(key);
+    tx.oncomplete=()=>{db.close();resolve();};
+    tx.onerror=()=>{db.close();reject(tx.error);};
+  });
 }
 
-$("nextPromptBtn").addEventListener("click",nextPrompt);
+// ===== Recording =====
+let mediaStream=null, recorder=null, chunks=[], previewUrl=null;
+let audioKey=null;
 
-$("testBtn").addEventListener("click",()=>{
- $("testOut").textContent="JS動作OK "+new Date().toLocaleTimeString();
+function setRecUI(isRec){
+  $("recDot").className = "dot" + (isRec ? " rec" : "");
+  $("recStartBtn").disabled = isRec;
+  $("recStopBtn").disabled = !isRec;
+  $("recClearBtn").disabled = isRec ? true : !audioKey;
+  $("recStatus").textContent = isRec ? "録音中…" : (audioKey ? "録音あり（保存済み）" : "録音なし");
+}
+
+async function startRecording(){
+  try{
+    if (!mediaStream) mediaStream = await navigator.mediaDevices.getUserMedia({audio:true});
+    chunks=[];
+    recorder = new MediaRecorder(mediaStream);
+    recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+    recorder.onstop = async () => {
+      const blob = new Blob(chunks, {type: recorder.mimeType || "audio/webm"});
+      audioKey = "audio_" + Date.now() + "_" + Math.random().toString(16).slice(2);
+      await putBlob(audioKey, blob);
+
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      previewUrl = URL.createObjectURL(blob);
+      $("recPreview").src = previewUrl;
+      $("recPreview").style.display="block";
+
+      setRecUI(false);
+      renderHistory();
+    };
+    recorder.start();
+    setRecUI(true);
+  }catch(err){
+    alert("マイクが使えませんでした。権限を許可してください。");
+    console.error(err);
+  }
+}
+function stopRecording(){ if (recorder && recorder.state!=="inactive") recorder.stop(); }
+async function clearRecording(){
+  if (!audioKey) return;
+  await delBlob(audioKey);
+  audioKey=null;
+  if (previewUrl) URL.revokeObjectURL(previewUrl);
+  previewUrl=null;
+  $("recPreview").removeAttribute("src");
+  $("recPreview").style.display="none";
+  setRecUI(false);
+  renderHistory();
+}
+
+$("recStartBtn").addEventListener("click", startRecording);
+$("recStopBtn").addEventListener("click", stopRecording);
+$("recClearBtn").addEventListener("click", clearRecording);
+
+// ===== History (localStorage) =====
+const KEY="talk_trainer_history_v3";
+function getHistory(){
+  try{return JSON.parse(localStorage.getItem(KEY)||"[]");}catch{return [];}
+}
+function setHistory(list){ localStorage.setItem(KEY, JSON.stringify(list)); }
+function escapeHtml(s){
+  return (s||"").replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
+}
+async function playAudio(k, btn){
+  try{
+    btn.disabled=true;
+    const blob=await getBlob(k);
+    if(!blob){alert("録音が見つかりません");return;}
+    const url=URL.createObjectURL(blob);
+    const a=new Audio(url);
+    a.onended=()=>URL.revokeObjectURL(url);
+    await a.play();
+  }finally{
+    btn.disabled=false;
+  }
+}
+function renderHistory(){
+  const h=getHistory().slice(0,10);
+  const root=$("history");
+  root.innerHTML="";
+  if(h.length===0){ root.textContent="まだ記録がありません。"; return; }
+
+  h.forEach(item=>{
+    const d=new Date(item.date);
+    const div=document.createElement("div");
+    div.className="historyItem";
+    div.innerHTML = `
+      <div class="row">
+        <span class="pill">${escapeHtml(d.toLocaleString("ja-JP"))}</span>
+        <span class="pill">${escapeHtml(item.tag||"-")}</span>
+        ${item.audioKey ? `<button data-a="${escapeHtml(item.audioKey)}">▶ 再生</button>` : `<span class="small">録音なし</span>`}
+      </div>
+      <div><b>一言：</b>${escapeHtml(item.oneLine||"")}</div>
+      <div class="small">${escapeHtml(item.prompt||"")}</div>
+    `;
+    root.appendChild(div);
+    const btn=div.querySelector("button[data-a]");
+    if(btn) btn.addEventListener("click", ()=>playAudio(btn.getAttribute("data-a"), btn));
+  });
+}
+
+function buildRecord(){
+  const p=(promptIndex===-1)?{tag:"",text:""}:prompts[promptIndex];
+  return {
+    date: new Date().toISOString(),
+    tag: p.tag,
+    prompt: p.text,
+    oneLine: $("oneLine").value.trim(),
+    ketsuron: $("ketsuron").value.trim(),
+    riyuu: $("riyuu").value.trim(),
+    rei: $("rei").value.trim(),
+    audioKey: audioKey || null
+  };
+}
+
+$("saveBtn").addEventListener("click", ()=>{
+  if(promptIndex===-1) nextPrompt();
+  const rec=buildRecord();
+  const h=getHistory();
+  h.unshift(rec);
+  setHistory(h);
+  renderHistory();
+  alert("保存しました");
 });
-</script>
 
+$("copyBtn").addEventListener("click", async ()=>{
+  const rec=buildRecord();
+  const text =
+`【話し方トレーニング記録】
+お題：${rec.tag} / ${rec.prompt}
+
+一言：${rec.oneLine}
+
+結論：${rec.ketsuron}
+理由：${rec.riyuu}
+例：${rec.rei}
+
+録音：${rec.audioKey ? "あり（端末内保存）" : "なし"}
+`;
+  try{
+    await navigator.clipboard.writeText(text);
+    alert("コピーしました。ここに貼れば添削できます。");
+  }catch{
+    alert("コピーできませんでした。");
+  }
+});
+
+$("wipeBtn").addEventListener("click", ()=>{
+  if(!confirm("履歴を削除しますか？")) return;
+  setHistory([]);
+  renderHistory();
+});
+
+setRecUI(false);
+renderHistory();
+</script>
 </body>
 </html>
