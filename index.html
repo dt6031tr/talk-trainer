@@ -82,7 +82,7 @@
 <div class="card">
   <div class="row" style="justify-content:space-between">
     <div>
-      <b>STEP 3：30秒で話す（タイマー）＋録音</b>
+      <b>STEP 3：30秒で話す（開始＝録音開始）</b>
       <div class="small">結論→理由→例で。</div>
     </div>
     <span id="s3Badge" class="pill warn">ロック中</span>
@@ -94,6 +94,9 @@
       <option value="on">ON</option>
       <option value="off">OFF</option>
     </select>
+    <span class="pill">録音</span>
+    <span id="recDot" class="dot"></span>
+    <span id="recStatus" class="small">STEP2完了後に解放されます。</span>
   </div>
 
   <div class="timer" id="timer30">00:30.0</div>
@@ -106,16 +109,7 @@
   </div>
 
   <div class="audioBox">
-    <div class="row">
-      <span class="pill">録音</span>
-      <span id="recDot" class="dot"></span>
-      <span id="recStatus" class="small">STEP2完了後に使えます。</span>
-    </div>
-    <div class="row" style="margin-top:8px;">
-      <button class="primary" id="recStartBtn" disabled>🎤 録音開始</button>
-      <button id="recStopBtn" disabled>⏹ 録音停止</button>
-      <button id="recClearBtn" disabled>🗑 破棄</button>
-    </div>
+    <div class="small" style="color:#666">録音プレビュー（直近の録音）</div>
     <audio id="recPreview" controls style="width:100%;margin-top:10px;display:none;"></audio>
     <div class="small" style="color:#666;margin-top:8px;">※初回はマイク許可が出ます。「許可」してください。</div>
   </div>
@@ -126,7 +120,7 @@
 <div class="card">
   <div class="row" style="justify-content:space-between">
     <div>
-      <b>STEP 4：15秒に削る（タイマー）</b>
+      <b>STEP 4：15秒に削る（開始＝録音開始）</b>
       <div class="small">“半分にする”が端的化の核心。</div>
     </div>
     <span id="s4Badge" class="pill warn">ロック中</span>
@@ -176,6 +170,7 @@ const prompts = [
   { tag:"学会/発表", text:"あなたの発表テーマの臨床的意義を30秒で説明してください。" }
 ];
 let promptIndex = -1;
+
 function pickRandomPromptIndex() {
   if (prompts.length <= 1) return 0;
   let idx = promptIndex;
@@ -243,6 +238,70 @@ function beep() {
   setTimeout(() => { o.stop(); ctx.close(); }, 180);
 }
 
+// ===== Recording (start is triggered by timer start) =====
+let mediaStream = null;
+let recorder = null;
+let chunks = [];
+let previewUrl = null;
+
+let audioKey30 = null;  // 30秒録音
+let audioKey15 = null;  // 15秒録音
+let currentRecTarget = null; // "30" or "15"
+
+function setRecUI(isRec){
+  $("recDot").className = "dot" + (isRec ? " rec" : "");
+  $("recStatus").textContent =
+    isRec ? "録音中…" :
+    (!state.s2 ? "STEP2完了後に解放されます。" : "開始すると自動で録音します。");
+}
+
+async function startRecording(target){
+  // target: "30" or "15"
+  currentRecTarget = target;
+  try{
+    if(!mediaStream) mediaStream = await navigator.mediaDevices.getUserMedia({audio:true});
+    chunks = [];
+    recorder = new MediaRecorder(mediaStream);
+    recorder.ondataavailable = e => { if(e.data && e.data.size) chunks.push(e.data); };
+
+    recorder.onstop = async () => {
+      try{
+        const blob = new Blob(chunks, {type: recorder.mimeType || "audio/webm"});
+        const key = "audio_" + currentRecTarget + "_" + Date.now() + "_" + Math.random().toString(16).slice(2);
+        await putBlob(key, blob);
+
+        if(currentRecTarget === "30") audioKey30 = key;
+        if(currentRecTarget === "15") audioKey15 = key;
+
+        // プレビューは「最後に録った方」
+        if(previewUrl) URL.revokeObjectURL(previewUrl);
+        previewUrl = URL.createObjectURL(blob);
+        $("recPreview").src = previewUrl;
+        $("recPreview").style.display = "block";
+
+        setRecUI(false);
+        renderHistory();
+      }catch(err){
+        console.error(err);
+        setRecUI(false);
+      }
+    };
+
+    recorder.start();
+    setRecUI(true);
+  }catch(err){
+    console.error(err);
+    alert("マイクが使えませんでした。権限を許可してください。");
+    setRecUI(false);
+  }
+}
+
+function stopRecording(){
+  try{
+    if(recorder && recorder.state !== "inactive") recorder.stop();
+  }catch(e){}
+}
+
 // ===== Timers =====
 function fmt(ms){
   const s = ms/1000;
@@ -251,8 +310,10 @@ function fmt(ms){
   return String(m).padStart(2,"0")+":"+sec;
 }
 
-function makeTimer(viewId, statusId, startBtnId, stopBtnId, resetBtnId, durationSec){
+function makeTimer(viewId, statusId, startBtnId, stopBtnId, resetBtnId, durationSec, hooks){
+  // hooks: { onStart: async()=>{}, onAutoEnd: ()=>{}, onStop: ()=>{} }
   let raf=null, startAt=null, elapsed=0, durationMs=durationSec*1000;
+  const safeHooks = hooks || {};
 
   function render(){
     const left = Math.max(0, durationMs - elapsed);
@@ -272,7 +333,10 @@ function makeTimer(viewId, statusId, startBtnId, stopBtnId, resetBtnId, duration
     raf = requestAnimationFrame(loop);
   }
 
-  function start(){
+  async function start(){
+    // 先に録音を開始してからタイマー開始（ユーザー操作内で行う）
+    if(safeHooks.onStart) await safeHooks.onStart();
+
     if(raf) cancelAnimationFrame(raf);
     startAt = performance.now() - elapsed;
     raf = requestAnimationFrame(loop);
@@ -284,10 +348,18 @@ function makeTimer(viewId, statusId, startBtnId, stopBtnId, resetBtnId, duration
   function stop(auto=false){
     if(raf) cancelAnimationFrame(raf);
     raf=null;
+
     $(startBtnId).disabled = false;
     $(stopBtnId).disabled = true;
-    if(auto){ beep(); $(statusId).textContent = "時間です。"; }
-    else { $(statusId).textContent = "停止しました。"; }
+
+    if(auto){
+      beep();
+      if(safeHooks.onAutoEnd) safeHooks.onAutoEnd();
+      $(statusId).textContent = "時間です。";
+    }else{
+      if(safeHooks.onStop) safeHooks.onStop();
+      $(statusId).textContent = "停止しました。";
+    }
   }
 
   function reset(){
@@ -318,65 +390,21 @@ function makeTimer(viewId, statusId, startBtnId, stopBtnId, resetBtnId, duration
   return { reset, setEnabled, getElapsed };
 }
 
-const timer30 = makeTimer("timer30","status30","start30Btn","stop30Btn","reset30Btn",30);
-const timer15 = makeTimer("timer15","status15","start15Btn","stop15Btn","reset15Btn",15);
+// Timer hooks: start => startRecording, autoEnd/stop => stopRecording
+const timer30 = makeTimer("timer30","status30","start30Btn","stop30Btn","reset30Btn",30,{
+  onStart: async()=>{ if(state.s2) await startRecording("30"); },
+  onAutoEnd: ()=>{ stopRecording(); },
+  onStop: ()=>{ stopRecording(); }
+});
 
-// ===== Recording =====
-let mediaStream=null, recorder=null, chunks=[], previewUrl=null;
-let audioKey=null;
-
-function setRecUI(isRec){
-  $("recDot").className = "dot" + (isRec ? " rec" : "");
-  $("recStartBtn").disabled = isRec || !state.s2;
-  $("recStopBtn").disabled = !isRec;
-  $("recClearBtn").disabled = isRec ? true : !audioKey;
-  $("recStatus").textContent = isRec ? "録音中…" : (audioKey ? "録音あり（保存済み）" : (state.s2 ? "録音できます（任意）" : "STEP2完了後に使えます。"));
-}
-
-async function startRecording(){
-  try{
-    if(!mediaStream) mediaStream = await navigator.mediaDevices.getUserMedia({audio:true});
-    chunks=[];
-    recorder = new MediaRecorder(mediaStream);
-    recorder.ondataavailable = e => { if(e.data && e.data.size) chunks.push(e.data); };
-    recorder.onstop = async () => {
-      const blob = new Blob(chunks, {type: recorder.mimeType || "audio/webm"});
-      audioKey = "audio_" + Date.now() + "_" + Math.random().toString(16).slice(2);
-      await putBlob(audioKey, blob);
-
-      if(previewUrl) URL.revokeObjectURL(previewUrl);
-      previewUrl = URL.createObjectURL(blob);
-      $("recPreview").src = previewUrl;
-      $("recPreview").style.display = "block";
-
-      setRecUI(false);
-      renderHistory();
-    };
-    recorder.start();
-    setRecUI(true);
-  }catch(err){
-    alert("マイクが使えませんでした。権限を許可してください。");
-    console.error(err);
-  }
-}
-function stopRecording(){ if(recorder && recorder.state!=="inactive") recorder.stop(); }
-async function clearRecording(){
-  if(!audioKey) return;
-  await delBlob(audioKey);
-  audioKey=null;
-  if(previewUrl) URL.revokeObjectURL(previewUrl);
-  previewUrl=null;
-  $("recPreview").removeAttribute("src");
-  $("recPreview").style.display="none";
-  setRecUI(false);
-  renderHistory();
-}
-$("recStartBtn").addEventListener("click", startRecording);
-$("recStopBtn").addEventListener("click", stopRecording);
-$("recClearBtn").addEventListener("click", clearRecording);
+const timer15 = makeTimer("timer15","status15","start15Btn","stop15Btn","reset15Btn",15,{
+  onStart: async()=>{ if(state.s3) await startRecording("15"); },
+  onAutoEnd: ()=>{ stopRecording(); },
+  onStop: ()=>{ stopRecording(); }
+});
 
 // ===== History =====
-const KEY="talk_trainer_history_v4";
+const KEY="talk_trainer_history_v5";
 function getHistory(){ try{return JSON.parse(localStorage.getItem(KEY)||"[]");}catch{return [];} }
 function setHistory(list){ localStorage.setItem(KEY, JSON.stringify(list)); }
 function escapeHtml(s){ return (s||"").replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m])); }
@@ -409,14 +437,16 @@ function renderHistory(){
         <span class="pill ok">${escapeHtml(item.tag||"-")}</span>
         <span class="pill">30秒:${escapeHtml(item.t30||"-")}</span>
         <span class="pill">15秒:${escapeHtml(item.t15||"-")}</span>
-        ${item.audioKey ? `<button data-a="${escapeHtml(item.audioKey)}">▶ 再生</button>` : `<span class="small" style="color:#666">録音なし</span>`}
+        ${item.audioKey30 ? `<button data-a="${escapeHtml(item.audioKey30)}">▶30</button>` : `<span class="small" style="color:#666">録音30なし</span>`}
+        ${item.audioKey15 ? `<button data-a="${escapeHtml(item.audioKey15)}">▶15</button>` : `<span class="small" style="color:#666">録音15なし</span>`}
       </div>
       <div style="margin-top:6px"><b>一言：</b>${escapeHtml(item.oneLine||"")}</div>
       <div class="small" style="color:#666">${escapeHtml(item.prompt||"")}</div>
     `;
     root.appendChild(div);
-    const btn=div.querySelector("button[data-a]");
-    if(btn) btn.addEventListener("click", ()=>playAudio(btn.getAttribute("data-a"), btn));
+    div.querySelectorAll("button[data-a]").forEach(btn=>{
+      btn.addEventListener("click", ()=>playAudio(btn.getAttribute("data-a"), btn));
+    });
   });
 }
 
@@ -433,8 +463,10 @@ function lockAll(){
   timer30.setEnabled(false);
   $("s3DoneBtn").disabled=true;
 
-  // Recording
-  audioKey=null;
+  // Recording keys
+  audioKey30=null;
+  audioKey15=null;
+  currentRecTarget=null;
   if(previewUrl) URL.revokeObjectURL(previewUrl);
   previewUrl=null;
   $("recPreview").style.display="none";
@@ -481,15 +513,14 @@ function unlockStep3(){
   $("s3DoneBtn").disabled=false;
   $("s3Badge").textContent="未完了";
   setRecUI(false);
-  $("recStartBtn").disabled=false;
-  $("recStatus").textContent="録音できます（任意）。";
-  $("status30").textContent="30秒で話してください（結論→理由→例）。";
+  $("recStatus").textContent="開始すると自動で録音します。";
+  $("status30").textContent="開始で録音＋タイマー開始（30秒）。";
 }
 function unlockStep4(){
   timer15.setEnabled(true);
   $("s4DoneBtn").disabled=false;
   $("s4Badge").textContent="未完了";
-  $("status15").textContent="15秒で削って話してください。";
+  $("status15").textContent="開始で録音＋タイマー開始（15秒）。";
 }
 function unlockSave(){
   $("saveBtn").disabled=false;
@@ -553,7 +584,8 @@ function buildRecord(){
     riyuu: $("riyuu").value.trim(),
     rei: $("rei").value.trim(),
     t30, t15,
-    audioKey: audioKey || null
+    audioKey30: audioKey30 || null,
+    audioKey15: audioKey15 || null
   };
 }
 
@@ -588,7 +620,9 @@ STEP2（結論→理由→例）：
 30秒：${rec.t30}
 15秒：${rec.t15}
 
-録音：${rec.audioKey ? "あり（端末内保存）" : "なし"}
+録音：
+30秒：${rec.audioKey30 ? "あり（端末内保存）" : "なし"}
+15秒：${rec.audioKey15 ? "あり（端末内保存）" : "なし"}
 `;
   try{
     await navigator.clipboard.writeText(text);
@@ -607,10 +641,8 @@ $("wipeHistoryBtn").addEventListener("click", () => {
 });
 
 // init
-timer30.reset(); timer15.reset();
 renderHistory();
 resetAllButHistory();
 </script>
 
-</body>
-</html>
+</
