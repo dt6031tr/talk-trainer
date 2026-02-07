@@ -1,116 +1,615 @@
 <!doctype html>
 <html lang="ja">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>話し方トレーニング</title>
-<style>
-body{font-family:sans-serif;margin:16px;background:#fafafa}
-.card{background:#fff;border:1px solid #ddd;border-radius:14px;padding:14px;margin:12px 0}
-button{padding:10px 12px;border-radius:12px;border:1px solid #bbb;background:#fff}
-button.primary{border-color:#111}
-button:disabled{opacity:.4}
-input{width:100%;padding:10px;border-radius:12px;border:1px solid #bbb;margin-top:6px}
-.timer{font-size:28px;font-weight:bold}
-.lock{color:#888;font-size:13px}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>話し方トレーニング</title>
+  <style>
+    body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;margin:16px;line-height:1.5;background:#fafafa}
+    h1{font-size:18px;margin:0 0 10px}
+    .card{background:#fff;border:1px solid #ddd;border-radius:14px;padding:14px;margin:12px 0}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    button{padding:10px 12px;border-radius:12px;border:1px solid #bbb;background:#fff}
+    button.primary{border-color:#111}
+    button:disabled{opacity:.45}
+    input,textarea,select{width:100%;box-sizing:border-box;padding:10px;border-radius:12px;border:1px solid #bbb}
+    .pill{padding:4px 10px;border:1px solid #ddd;border-radius:999px;font-size:12px}
+    .ok{border-color:#1a7f37;color:#1a7f37}
+    .warn{border-color:#b45309;color:#b45309}
+    .small{font-size:13px;color:#555}
+    .timer{font-size:40px;font-variant-numeric:tabular-nums;margin:6px 0}
+    .dot{width:10px;height:10px;border-radius:999px;background:#bbb;display:inline-block}
+    .dot.rec{background:#d00000;box-shadow:0 0 0 4px rgba(208,0,0,.15)}
+    .historyItem{border-top:1px solid #eee;padding-top:10px;margin-top:10px}
+    .audioBox{padding:10px;border:1px solid #eee;border-radius:12px;margin-top:10px}
+    .hr{height:1px;background:#eee;margin:12px 0}
+  </style>
 </head>
 <body>
 
-<h1>話し方トレーニング</h1>
+<h1>話し方トレーニング（順番：一言→構造→30秒→15秒）</h1>
 
 <div class="card">
-<button id="nextPromptBtn">お題を出す</button>
-<p id="prompt">押してください</p>
+  <div class="row">
+    <span class="pill">お題</span>
+    <span id="tag" class="pill ok">未選択</span>
+    <button id="nextPromptBtn">お題を出す</button>
+  </div>
+  <div style="margin-top:10px;">
+    <div class="small">今日のお題</div>
+    <div id="prompt" style="font-size:16px;font-weight:600;">「お題を出す」を押してください。</div>
+  </div>
 </div>
 
 <div class="card">
-STEP1 一言
-<input id="oneLine">
-<button id="s1done">STEP1完了</button>
+  <div class="row" style="justify-content:space-between">
+    <div>
+      <b>STEP 1：一言要約（30文字目安）</b>
+      <div class="small">主語＋結論。まず“言い切る”。</div>
+    </div>
+    <span id="s1Badge" class="pill warn">未完了</span>
+  </div>
+  <input id="oneLine" placeholder="例：フロスは隣接面の汚れを落とすため必要" maxlength="60">
+  <div class="row" style="margin-top:10px;">
+    <button class="primary" id="s1DoneBtn">STEP1完了</button>
+    <span class="small" style="color:#666">（多少オーバーはOK）</span>
+  </div>
 </div>
 
 <div class="card">
-STEP2 構造
-<input id="ketsuron" placeholder="結論" disabled>
-<input id="riyuu" placeholder="理由" disabled>
-<input id="rei" placeholder="例" disabled>
-<button id="s2done" disabled>STEP2完了</button>
+  <div class="row" style="justify-content:space-between">
+    <div>
+      <b>STEP 2：結論→理由→例（箇条書きでOK）</b>
+      <div class="small">話す前に“型”を置く。</div>
+    </div>
+    <span id="s2Badge" class="pill warn">ロック中</span>
+  </div>
+
+  <div style="margin-top:10px">
+    <div class="small" style="color:#666">結論</div>
+    <input id="ketsuron" placeholder="結論" disabled>
+    <div class="small" style="color:#666;margin-top:8px">理由</div>
+    <input id="riyuu" placeholder="理由" disabled>
+    <div class="small" style="color:#666;margin-top:8px">例</div>
+    <input id="rei" placeholder="例" disabled>
+  </div>
+
+  <div class="row" style="margin-top:10px;">
+    <button class="primary" id="s2DoneBtn" disabled>STEP2完了</button>
+  </div>
 </div>
 
 <div class="card">
-STEP3 30秒トーク
-<div class="timer" id="t30">30</div>
-<button id="start30" disabled>開始</button>
+  <div class="row" style="justify-content:space-between">
+    <div>
+      <b>STEP 3：30秒で話す（タイマー）＋録音</b>
+      <div class="small">結論→理由→例で。</div>
+    </div>
+    <span id="s3Badge" class="pill warn">ロック中</span>
+  </div>
+
+  <div class="row" style="margin-top:8px;">
+    <span class="pill">ビープ</span>
+    <select id="beep" disabled>
+      <option value="on">ON</option>
+      <option value="off">OFF</option>
+    </select>
+  </div>
+
+  <div class="timer" id="timer30">00:30.0</div>
+
+  <div class="row">
+    <button class="primary" id="start30Btn" disabled>開始</button>
+    <button id="stop30Btn" disabled>停止</button>
+    <button id="reset30Btn" disabled>リセット</button>
+    <button id="s3DoneBtn" disabled>STEP3完了</button>
+  </div>
+
+  <div class="audioBox">
+    <div class="row">
+      <span class="pill">録音</span>
+      <span id="recDot" class="dot"></span>
+      <span id="recStatus" class="small">STEP2完了後に使えます。</span>
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <button class="primary" id="recStartBtn" disabled>🎤 録音開始</button>
+      <button id="recStopBtn" disabled>⏹ 録音停止</button>
+      <button id="recClearBtn" disabled>🗑 破棄</button>
+    </div>
+    <audio id="recPreview" controls style="width:100%;margin-top:10px;display:none;"></audio>
+    <div class="small" style="color:#666;margin-top:8px;">※初回はマイク許可が出ます。「許可」してください。</div>
+  </div>
+
+  <div class="small" id="status30" style="margin-top:8px;color:#666">STEP2完了後に解放されます。</div>
 </div>
 
 <div class="card">
-STEP4 15秒要約
-<div class="timer" id="t15">15</div>
-<button id="start15" disabled>開始</button>
+  <div class="row" style="justify-content:space-between">
+    <div>
+      <b>STEP 4：15秒に削る（タイマー）</b>
+      <div class="small">“半分にする”が端的化の核心。</div>
+    </div>
+    <span id="s4Badge" class="pill warn">ロック中</span>
+  </div>
+
+  <div class="timer" id="timer15">00:15.0</div>
+  <div class="row">
+    <button class="primary" id="start15Btn" disabled>開始</button>
+    <button id="stop15Btn" disabled>停止</button>
+    <button id="reset15Btn" disabled>リセット</button>
+    <button id="s4DoneBtn" disabled>STEP4完了</button>
+  </div>
+  <div class="small" id="status15" style="margin-top:8px;color:#666">STEP3完了後に解放されます。</div>
+</div>
+
+<div class="card">
+  <div class="row" style="justify-content:space-between">
+    <div>
+      <b>保存・履歴</b>
+      <div class="small">保存すると端末内に残ります。</div>
+    </div>
+    <span id="saveBadge" class="pill warn">未保存</span>
+  </div>
+
+  <div class="hr"></div>
+
+  <div class="row">
+    <button class="primary" id="saveBtn" disabled>記録を保存</button>
+    <button id="copyBtn" disabled>添削用にコピー</button>
+    <button id="clearBtn">リセット</button>
+    <button id="wipeHistoryBtn">履歴削除</button>
+  </div>
+
+  <div id="history" style="margin-top:10px;"></div>
 </div>
 
 <script>
-const prompts=[
-"フロスが必要な理由",
-"検査を大事にする理由",
-"今日の出来事を端的に",
-"医院理念を説明",
-"歯周治療の価値"
+const $ = (id) => document.getElementById(id);
+
+// ===== Prompts (random, no immediate repeat) =====
+const prompts = [
+  { tag:"歯科（患者説明）", text:"フロスが必要な理由を、患者さんにわかる言葉で説明してください。" },
+  { tag:"歯科（初診）", text:"『初診では今日は治療をしない』理由を、安心感が出るように説明してください。" },
+  { tag:"スタッフ向け", text:"院内で『結論から話す』ルールを導入する理由を説明してください。" },
+  { tag:"経営", text:"検査（写真・歯周検査等）を大事にする価値を説明してください。" },
+  { tag:"日常", text:"今日いちばん大事だった出来事を、端的に説明してください。" },
+  { tag:"学会/発表", text:"あなたの発表テーマの臨床的意義を30秒で説明してください。" }
 ];
-
-let pIndex=-1;
-document.getElementById("nextPromptBtn").onclick=()=>{
- pIndex=Math.floor(Math.random()*prompts.length);
- document.getElementById("prompt").textContent=prompts[pIndex];
- resetAll();
+let promptIndex = -1;
+function pickRandomPromptIndex() {
+  if (prompts.length <= 1) return 0;
+  let idx = promptIndex;
+  while (idx === promptIndex) idx = Math.floor(Math.random() * prompts.length);
+  return idx;
+}
+function nextPrompt() {
+  promptIndex = pickRandomPromptIndex();
+  $("tag").textContent = prompts[promptIndex].tag;
+  $("prompt").textContent = prompts[promptIndex].text;
 }
 
-function resetAll(){
- document.getElementById("ketsuron").disabled=true;
- document.getElementById("riyuu").disabled=true;
- document.getElementById("rei").disabled=true;
- document.getElementById("s2done").disabled=true;
- document.getElementById("start30").disabled=true;
- document.getElementById("start15").disabled=true;
+// ===== IndexedDB (audio) =====
+const DB_NAME = "talk_trainer_db_v1";
+const STORE = "audio";
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function putBlob(key, blob) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    tx.objectStore(STORE).put(blob, key);
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+async function getBlob(key) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readonly");
+    const req = tx.objectStore(STORE).get(key);
+    req.onsuccess = () => { const v = req.result; db.close(); resolve(v || null); };
+    req.onerror = () => { db.close(); reject(req.error); };
+  });
+}
+async function delBlob(key) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    tx.objectStore(STORE).delete(key);
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
 }
 
-document.getElementById("s1done").onclick=()=>{
- document.getElementById("ketsuron").disabled=false;
- document.getElementById("riyuu").disabled=false;
- document.getElementById("rei").disabled=false;
- document.getElementById("s2done").disabled=false;
+// ===== Beep =====
+function beep() {
+  if ($("beep").value !== "on") return;
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = "sine"; o.frequency.value = 880;
+  g.gain.value = 0.06;
+  o.connect(g); g.connect(ctx.destination);
+  o.start();
+  setTimeout(() => { o.stop(); ctx.close(); }, 180);
 }
 
-document.getElementById("s2done").onclick=()=>{
- document.getElementById("start30").disabled=false;
+// ===== Timers =====
+function fmt(ms){
+  const s = ms/1000;
+  const m = Math.floor(s/60);
+  const sec = (s - m*60).toFixed(1).padStart(4,"0");
+  return String(m).padStart(2,"0")+":"+sec;
 }
 
-function beep(){
- const ctx=new AudioContext();
- const osc=ctx.createOscillator();
- osc.connect(ctx.destination);
- osc.start();
- osc.stop(ctx.currentTime+0.2);
-}
+function makeTimer(viewId, statusId, startBtnId, stopBtnId, resetBtnId, durationSec){
+  let raf=null, startAt=null, elapsed=0, durationMs=durationSec*1000;
 
-function startTimer(sec,id,nextBtn){
- let t=sec;
- const el=document.getElementById(id);
- el.textContent=t;
- const timer=setInterval(()=>{
-  t--;
-  el.textContent=t;
-  if(t==0){
-   clearInterval(timer);
-   beep();
-   if(nextBtn) document.getElementById(nextBtn).disabled=false;
+  function render(){
+    const left = Math.max(0, durationMs - elapsed);
+    $(viewId).textContent = fmt(left);
   }
- },1000);
+
+  function loop(){
+    const now=performance.now();
+    elapsed = now - startAt;
+    if(elapsed >= durationMs){
+      elapsed = durationMs;
+      render();
+      stop(true);
+      return;
+    }
+    render();
+    raf = requestAnimationFrame(loop);
+  }
+
+  function start(){
+    if(raf) cancelAnimationFrame(raf);
+    startAt = performance.now() - elapsed;
+    raf = requestAnimationFrame(loop);
+    $(startBtnId).disabled = true;
+    $(stopBtnId).disabled = false;
+    $(statusId).textContent = durationSec + "秒：話してください。";
+  }
+
+  function stop(auto=false){
+    if(raf) cancelAnimationFrame(raf);
+    raf=null;
+    $(startBtnId).disabled = false;
+    $(stopBtnId).disabled = true;
+    if(auto){ beep(); $(statusId).textContent = "時間です。"; }
+    else { $(statusId).textContent = "停止しました。"; }
+  }
+
+  function reset(){
+    if(raf) cancelAnimationFrame(raf);
+    raf=null;
+    elapsed=0;
+    render();
+    $(startBtnId).disabled = false;
+    $(stopBtnId).disabled = true;
+    $(statusId).textContent = "リセットしました。";
+  }
+
+  function getElapsed(){ return elapsed; }
+  function setEnabled(on){
+    $(startBtnId).disabled = !on;
+    $(stopBtnId).disabled = true;
+    $(resetBtnId).disabled = !on;
+  }
+
+  $(startBtnId).addEventListener("click", start);
+  $(stopBtnId).addEventListener("click", () => stop(false));
+  $(resetBtnId).addEventListener("click", reset);
+
+  // init
+  render();
+  setEnabled(false);
+
+  return { reset, setEnabled, getElapsed };
 }
 
-document.getElementById("start30").onclick=()=>startTimer(30,"t30","start15");
-document.getElementById("start15").onclick=()=>startTimer(15,"t15");
+const timer30 = makeTimer("timer30","status30","start30Btn","stop30Btn","reset30Btn",30);
+const timer15 = makeTimer("timer15","status15","start15Btn","stop15Btn","reset15Btn",15);
+
+// ===== Recording =====
+let mediaStream=null, recorder=null, chunks=[], previewUrl=null;
+let audioKey=null;
+
+function setRecUI(isRec){
+  $("recDot").className = "dot" + (isRec ? " rec" : "");
+  $("recStartBtn").disabled = isRec || !state.s2;
+  $("recStopBtn").disabled = !isRec;
+  $("recClearBtn").disabled = isRec ? true : !audioKey;
+  $("recStatus").textContent = isRec ? "録音中…" : (audioKey ? "録音あり（保存済み）" : (state.s2 ? "録音できます（任意）" : "STEP2完了後に使えます。"));
+}
+
+async function startRecording(){
+  try{
+    if(!mediaStream) mediaStream = await navigator.mediaDevices.getUserMedia({audio:true});
+    chunks=[];
+    recorder = new MediaRecorder(mediaStream);
+    recorder.ondataavailable = e => { if(e.data && e.data.size) chunks.push(e.data); };
+    recorder.onstop = async () => {
+      const blob = new Blob(chunks, {type: recorder.mimeType || "audio/webm"});
+      audioKey = "audio_" + Date.now() + "_" + Math.random().toString(16).slice(2);
+      await putBlob(audioKey, blob);
+
+      if(previewUrl) URL.revokeObjectURL(previewUrl);
+      previewUrl = URL.createObjectURL(blob);
+      $("recPreview").src = previewUrl;
+      $("recPreview").style.display = "block";
+
+      setRecUI(false);
+      renderHistory();
+    };
+    recorder.start();
+    setRecUI(true);
+  }catch(err){
+    alert("マイクが使えませんでした。権限を許可してください。");
+    console.error(err);
+  }
+}
+function stopRecording(){ if(recorder && recorder.state!=="inactive") recorder.stop(); }
+async function clearRecording(){
+  if(!audioKey) return;
+  await delBlob(audioKey);
+  audioKey=null;
+  if(previewUrl) URL.revokeObjectURL(previewUrl);
+  previewUrl=null;
+  $("recPreview").removeAttribute("src");
+  $("recPreview").style.display="none";
+  setRecUI(false);
+  renderHistory();
+}
+$("recStartBtn").addEventListener("click", startRecording);
+$("recStopBtn").addEventListener("click", stopRecording);
+$("recClearBtn").addEventListener("click", clearRecording);
+
+// ===== History =====
+const KEY="talk_trainer_history_v4";
+function getHistory(){ try{return JSON.parse(localStorage.getItem(KEY)||"[]");}catch{return [];} }
+function setHistory(list){ localStorage.setItem(KEY, JSON.stringify(list)); }
+function escapeHtml(s){ return (s||"").replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m])); }
+
+async function playAudio(k, btn){
+  try{
+    btn.disabled=true;
+    const blob=await getBlob(k);
+    if(!blob){alert("録音が見つかりません");return;}
+    const url=URL.createObjectURL(blob);
+    const a=new Audio(url);
+    a.onended=()=>URL.revokeObjectURL(url);
+    await a.play();
+  }finally{ btn.disabled=false; }
+}
+
+function renderHistory(){
+  const h=getHistory().slice(0,10);
+  const root=$("history");
+  root.innerHTML="";
+  if(h.length===0){ root.innerHTML = `<div class="small" style="color:#666">まだ記録がありません。</div>`; return; }
+
+  h.forEach(item=>{
+    const d=new Date(item.date);
+    const div=document.createElement("div");
+    div.className="historyItem";
+    div.innerHTML = `
+      <div class="row">
+        <span class="pill">${escapeHtml(d.toLocaleString("ja-JP"))}</span>
+        <span class="pill ok">${escapeHtml(item.tag||"-")}</span>
+        <span class="pill">30秒:${escapeHtml(item.t30||"-")}</span>
+        <span class="pill">15秒:${escapeHtml(item.t15||"-")}</span>
+        ${item.audioKey ? `<button data-a="${escapeHtml(item.audioKey)}">▶ 再生</button>` : `<span class="small" style="color:#666">録音なし</span>`}
+      </div>
+      <div style="margin-top:6px"><b>一言：</b>${escapeHtml(item.oneLine||"")}</div>
+      <div class="small" style="color:#666">${escapeHtml(item.prompt||"")}</div>
+    `;
+    root.appendChild(div);
+    const btn=div.querySelector("button[data-a]");
+    if(btn) btn.addEventListener("click", ()=>playAudio(btn.getAttribute("data-a"), btn));
+  });
+}
+
+// ===== State / Locks =====
+const state = { s1:false, s2:false, s3:false, s4:false, ms30:0, ms15:0 };
+
+function lockAll(){
+  // Step2
+  ["ketsuron","riyuu","rei"].forEach(id => { $(id).disabled=true; $(id).value=""; });
+  $("s2DoneBtn").disabled=true;
+
+  // Step3
+  $("beep").disabled=true;
+  timer30.setEnabled(false);
+  $("s3DoneBtn").disabled=true;
+
+  // Recording
+  audioKey=null;
+  if(previewUrl) URL.revokeObjectURL(previewUrl);
+  previewUrl=null;
+  $("recPreview").style.display="none";
+  $("recPreview").removeAttribute("src");
+  setRecUI(false);
+
+  // Step4
+  timer15.setEnabled(false);
+  $("s4DoneBtn").disabled=true;
+
+  // Save
+  $("saveBtn").disabled=true;
+  $("copyBtn").disabled=true;
+
+  // badges
+  $("s1Badge").className="pill warn"; $("s1Badge").textContent="未完了";
+  $("s2Badge").className="pill warn"; $("s2Badge").textContent="ロック中";
+  $("s3Badge").className="pill warn"; $("s3Badge").textContent="ロック中";
+  $("s4Badge").className="pill warn"; $("s4Badge").textContent="ロック中";
+  $("saveBadge").className="pill warn"; $("saveBadge").textContent="未保存";
+
+  // status
+  $("status30").textContent="STEP2完了後に解放されます。";
+  $("status15").textContent="STEP3完了後に解放されます。";
+}
+
+function resetAllButHistory(){
+  state.s1=state.s2=state.s3=state.s4=false;
+  state.ms30=0; state.ms15=0;
+  $("oneLine").value="";
+  timer30.reset();
+  timer15.reset();
+  lockAll();
+}
+
+function unlockStep2(){
+  ["ketsuron","riyuu","rei"].forEach(id => $(id).disabled=false);
+  $("s2DoneBtn").disabled=false;
+  $("s2Badge").textContent="未完了";
+}
+function unlockStep3(){
+  $("beep").disabled=false;
+  timer30.setEnabled(true);
+  $("s3DoneBtn").disabled=false;
+  $("s3Badge").textContent="未完了";
+  setRecUI(false);
+  $("recStartBtn").disabled=false;
+  $("recStatus").textContent="録音できます（任意）。";
+  $("status30").textContent="30秒で話してください（結論→理由→例）。";
+}
+function unlockStep4(){
+  timer15.setEnabled(true);
+  $("s4DoneBtn").disabled=false;
+  $("s4Badge").textContent="未完了";
+  $("status15").textContent="15秒で削って話してください。";
+}
+function unlockSave(){
+  $("saveBtn").disabled=false;
+  $("copyBtn").disabled=false;
+  $("saveBadge").className="pill ok";
+  $("saveBadge").textContent="保存できます";
+}
+
+// ===== Events =====
+$("nextPromptBtn").addEventListener("click", () => {
+  nextPrompt();
+  resetAllButHistory();
+});
+
+$("s1DoneBtn").addEventListener("click", () => {
+  if(promptIndex===-1) nextPrompt();
+  const t=$("oneLine").value.trim();
+  if(!t){ alert("一言要約を入力してください"); return; }
+  state.s1=true;
+  $("s1Badge").className="pill ok"; $("s1Badge").textContent="完了";
+  $("s2Badge").className="pill warn"; $("s2Badge").textContent="未完了";
+  unlockStep2();
+});
+
+$("s2DoneBtn").addEventListener("click", () => {
+  const k=$("ketsuron").value.trim(), r=$("riyuu").value.trim(), e=$("rei").value.trim();
+  if(!k||!r||!e){ alert("結論・理由・例を埋めてください"); return; }
+  state.s2=true;
+  $("s2Badge").className="pill ok"; $("s2Badge").textContent="完了";
+  $("s3Badge").className="pill warn"; $("s3Badge").textContent="未完了";
+  unlockStep3();
+});
+
+$("s3DoneBtn").addEventListener("click", () => {
+  state.s3=true;
+  state.ms30 = timer30.getElapsed();
+  $("s3Badge").className="pill ok"; $("s3Badge").textContent="完了";
+  $("s4Badge").className="pill warn"; $("s4Badge").textContent="未完了";
+  unlockStep4();
+  timer30.reset();
+});
+
+$("s4DoneBtn").addEventListener("click", () => {
+  state.s4=true;
+  state.ms15 = timer15.getElapsed();
+  $("s4Badge").className="pill ok"; $("s4Badge").textContent="完了";
+  unlockSave();
+  timer15.reset();
+});
+
+function buildRecord(){
+  const p=(promptIndex===-1)?{tag:"",text:""}:prompts[promptIndex];
+  const t30 = state.ms30 ? (state.ms30/1000).toFixed(1)+"s" : "-";
+  const t15 = state.ms15 ? (state.ms15/1000).toFixed(1)+"s" : "-";
+  return {
+    date: new Date().toISOString(),
+    tag: p.tag,
+    prompt: p.text,
+    oneLine: $("oneLine").value.trim(),
+    ketsuron: $("ketsuron").value.trim(),
+    riyuu: $("riyuu").value.trim(),
+    rei: $("rei").value.trim(),
+    t30, t15,
+    audioKey: audioKey || null
+  };
+}
+
+$("saveBtn").addEventListener("click", () => {
+  if(!state.s4){ alert("STEP4まで完了してから保存してください"); return; }
+  const rec=buildRecord();
+  const h=getHistory();
+  h.unshift(rec);
+  setHistory(h);
+  renderHistory();
+  $("saveBadge").className="pill ok";
+  $("saveBadge").textContent="保存済み";
+});
+
+$("copyBtn").addEventListener("click", async () => {
+  const rec=buildRecord();
+  const d=new Date(rec.date).toLocaleString("ja-JP");
+  const text =
+`【話し方トレーニング記録】
+日時：${d}
+お題：${rec.tag} / ${rec.prompt}
+
+STEP1（一言）：
+${rec.oneLine}
+
+STEP2（結論→理由→例）：
+結論：${rec.ketsuron}
+理由：${rec.riyuu}
+例　：${rec.rei}
+
+タイム：
+30秒：${rec.t30}
+15秒：${rec.t15}
+
+録音：${rec.audioKey ? "あり（端末内保存）" : "なし"}
+`;
+  try{
+    await navigator.clipboard.writeText(text);
+    alert("コピーしました。ここに貼れば添削できます。");
+  }catch{
+    alert("コピーできませんでした。");
+  }
+});
+
+$("clearBtn").addEventListener("click", resetAllButHistory);
+
+$("wipeHistoryBtn").addEventListener("click", () => {
+  if(!confirm("履歴をすべて削除しますか？")) return;
+  setHistory([]);
+  renderHistory();
+});
+
+// init
+timer30.reset(); timer15.reset();
+renderHistory();
+resetAllButHistory();
 </script>
 
 </body>
