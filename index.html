@@ -643,6 +643,31 @@ $("wipeHistoryBtn").addEventListener("click", () => {
 // init
 renderHistory();
 resetAllButHistory();
+
+  // ===== 強制停止：タイマー停止/リセット/完了で録音も止める =====
+function hardStopRecording(){
+  try{
+    if (recorder && recorder.state && recorder.state !== "inactive") {
+      recorder.stop();
+    }
+  }catch(e){}
+  try{
+    setRecUI(false);
+  }catch(e){}
+}
+
+// 30秒：停止/リセットで録音停止
+$("stop30Btn").addEventListener("click", hardStopRecording, true);
+$("reset30Btn").addEventListener("click", hardStopRecording, true);
+
+// 15秒：停止/リセットで録音停止
+$("stop15Btn").addEventListener("click", hardStopRecording, true);
+$("reset15Btn").addEventListener("click", hardStopRecording, true);
+
+// 完了ボタンでも録音停止（事故防止）
+$("s3DoneBtn").addEventListener("click", hardStopRecording, true);
+$("s4DoneBtn").addEventListener("click", hardStopRecording, true);
 </script>
 
 </
+
